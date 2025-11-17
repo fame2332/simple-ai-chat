@@ -4,70 +4,26 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Plus, Search, ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-interface Prompt {
-  id: string;
-  title: string;
-  content: string;
-}
-
-interface Category {
-  id: string;
-  name: string;
-  prompts: Prompt[];
-  subcategories?: Category[];
-}
+import { Library, Category } from "@/types/library";
 
 export const RightSidebar = ({
   isOpen,
   searchQuery,
   onAddPrompt,
+  libraries,
 }: {
   isOpen: boolean;
   searchQuery?: string;
   onAddPrompt?: () => void;
+  libraries: Library[];
 }) => {
   const [searchInput, setSearchInput] = useState("");
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
     new Set(["marketing"])
   );
 
-  const categories: Category[] = [
-    {
-      id: "marketing",
-      name: "Marketing",
-      prompts: [
-        { id: "m1", title: "Social Media Post", content: "Create an engaging social media post about..." },
-        { id: "m2", title: "Email Campaign", content: "Write a compelling email campaign for..." },
-      ],
-      subcategories: [
-        {
-          id: "seo",
-          name: "SEO",
-          prompts: [
-            { id: "s1", title: "Meta Description", content: "Generate SEO meta description for..." },
-            { id: "s2", title: "Blog Outline", content: "Create an SEO-optimized blog outline for..." },
-          ],
-        },
-      ],
-    },
-    {
-      id: "development",
-      name: "Development",
-      prompts: [
-        { id: "d1", title: "Code Review", content: "Review this code and suggest improvements..." },
-        { id: "d2", title: "Bug Fix", content: "Help me debug this issue..." },
-      ],
-    },
-    {
-      id: "writing",
-      name: "Writing",
-      prompts: [
-        { id: "w1", title: "Blog Post", content: "Write a blog post about..." },
-        { id: "w2", title: "Product Description", content: "Create a product description for..." },
-      ],
-    },
-  ];
+  const activeLibraries = libraries.filter((lib) => lib.isActive);
+  const showLibraryNames = activeLibraries.length > 1;
 
   const toggleCategory = (categoryId: string) => {
     setExpandedCategories((prev) => {
@@ -81,54 +37,82 @@ export const RightSidebar = ({
     });
   };
 
-  const filterPrompts = (query: string) => {
-    if (!query) return categories;
+  const filterCategories = (
+    categories: Category[],
+    query: string,
+    libraryName?: string
+  ): (Category & { libraryName?: string })[] => {
+    if (!query) return categories.map((cat) => ({ ...cat, libraryName }));
     const lowerQuery = query.toLowerCase();
     return categories
       .map((cat) => ({
         ...cat,
+        libraryName,
         prompts: cat.prompts.filter(
           (p) =>
             p.title.toLowerCase().includes(lowerQuery) ||
             p.content.toLowerCase().includes(lowerQuery)
         ),
         subcategories: cat.subcategories
-          ?.map((sub) => ({
-            ...sub,
-            prompts: sub.prompts.filter(
-              (p) =>
-                p.title.toLowerCase().includes(lowerQuery) ||
-                p.content.toLowerCase().includes(lowerQuery)
-            ),
-          }))
-          .filter((sub) => sub.prompts.length > 0),
+          ? filterCategories(cat.subcategories, query, libraryName)
+          : undefined,
       }))
-      .filter((cat) => cat.prompts.length > 0 || (cat.subcategories && cat.subcategories.length > 0));
+      .filter(
+        (cat) =>
+          cat.prompts.length > 0 || (cat.subcategories && cat.subcategories.length > 0)
+      );
   };
 
-  const displayCategories = filterPrompts(searchQuery || searchInput);
+  const getAllCategories = () => {
+    let allCategories: (Category & { libraryName?: string })[] = [];
+    activeLibraries.forEach((lib) => {
+      const filtered = filterCategories(
+        lib.categories,
+        searchQuery || searchInput,
+        showLibraryNames ? lib.name : undefined
+      );
+      allCategories = allCategories.concat(filtered);
+    });
+    return allCategories;
+  };
 
-  const CategoryNode = ({ category, level = 0 }: { category: Category; level?: number }) => {
+  const displayCategories = getAllCategories();
+
+  const CategoryNode = ({
+    category,
+    level = 0,
+  }: {
+    category: Category & { libraryName?: string };
+    level?: number;
+  }) => {
     const isExpanded = expandedCategories.has(category.id);
-    const hasContent = category.prompts.length > 0 || (category.subcategories && category.subcategories.length > 0);
+    const hasContent =
+      category.prompts.length > 0 || (category.subcategories && category.subcategories.length > 0);
 
     return (
       <div className="mb-2">
         <button
           onClick={() => toggleCategory(category.id)}
-          className="flex items-center w-full px-2 py-1.5 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent rounded transition-colors"
+          className="flex items-center justify-between w-full px-2 py-1.5 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent rounded transition-colors"
           style={{ paddingLeft: `${8 + level * 12}px` }}
         >
-          {hasContent && (
-            <>
-              {isExpanded ? (
-                <ChevronDown className="h-4 w-4 mr-1" />
-              ) : (
-                <ChevronRight className="h-4 w-4 mr-1" />
-              )}
-            </>
+          <div className="flex items-center">
+            {hasContent && (
+              <>
+                {isExpanded ? (
+                  <ChevronDown className="h-4 w-4 mr-1" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 mr-1" />
+                )}
+              </>
+            )}
+            <span>{category.name}</span>
+          </div>
+          {category.libraryName && (
+            <span className="text-xs text-muted-foreground font-normal ml-2">
+              {category.libraryName}
+            </span>
           )}
-          {category.name}
         </button>
 
         {isExpanded && (
